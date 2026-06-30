@@ -18,7 +18,6 @@
     font-family:'Hahmlet','Noto Serif KR',Georgia,serif;
     min-height:100vh; min-height:100dvh;
   }
-  .sans{ font-family:'Noto Sans KR',sans-serif; }
   .wrap{ max-width:680px; margin:0 auto; }
   .gate{ max-width:440px; margin:11vh auto 0; padding:0 24px; }
   .eyebrow{ font-family:'Noto Sans KR',sans-serif; font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--accent); font-weight:700; }
@@ -36,13 +35,15 @@
     margin-top:14px; padding:12px 22px; background:var(--ink); color:var(--paper);
     border:none; border-radius:10px; font-size:14px; font-weight:700;
   }
-  .btn[disabled]{ opacity:.45; cursor:default; }
+  .btn:disabled{ opacity:.45; cursor:default; }
   .btn-block{ width:100%; }
   .textbtn{ background:none; border:none; color:var(--accent); font-size:12.5px; font-weight:500; padding:2px 0; }
   header.app{ display:flex; justify-content:space-between; align-items:flex-start; padding:28px 24px 18px; }
+  .hname{ font-family:'Hahmlet',serif; font-weight:700; font-size:22px; line-height:1.1; }
   .datebar{ display:flex; justify-content:space-between; align-items:center; padding:8px 24px 16px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .dlabel{ font-family:'Hahmlet',serif; font-weight:700; font-size:17px; }
   .arrow{ background:none; border:1px solid var(--line); border-radius:8px; width:38px; height:38px; font-size:20px; color:var(--ink); line-height:1; }
-  .arrow[disabled]{ opacity:.3; }
+  .arrow:disabled{ opacity:.3; }
   main{ padding:8px 24px 48px; }
   label.field{ display:block; font-family:'Noto Sans KR',sans-serif; font-size:13px; font-weight:700; margin:20px 0 10px; }
   .row{ display:flex; align-items:center; gap:14px; margin-top:14px; flex-wrap:wrap; }
@@ -53,140 +54,122 @@
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div class="wrap" id="app"></div>
 
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script>
+// 배포한 구글 웹앱 URL을 여기에 넣어주세요 (.../exec 로 끝나는 주소)
+var ENDPOINT = "https://script.google.com/macros/s/AKfycbyzeGcjaCHPA0U4q8Bs5h4ZgMmzfwiCnbcaGKKAnDJcww7WnfHVOWYNz180RueA2V3EiA/exec";
 
-<script type="text/babel" data-presets="react">
-const { useState, useEffect } = React;
-
-// ⚙️ 배포한 구글 웹앱 URL을 여기에 한 번만 넣어주세요 (…/exec 로 끝나는 주소)
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbyzeGcjaCHPA0U4q8Bs5h4ZgMmzfwiCnbcaGKKAnDJcww7WnfHVOWYNz180RueA2V3EiA/exec";
-
-// 날짜 유틸
-const pad = (n) => String(n).padStart(2, "0");
-const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const todayKey = () => toKey(new Date());
-const WEEK = ["일","월","화","수","목","금","토"];
-const fmtLong = (key) => {
-  const [y,m,d] = key.split("-").map(Number);
-  const dt = new Date(y, m-1, d);
-  return `${y}년 ${m}월 ${d}일 (${WEEK[dt.getDay()]})`;
-};
-const shiftKey = (key, days) => {
-  const [y,m,d] = key.split("-").map(Number);
-  const dt = new Date(y, m-1, d);
+function pad(n){ return String(n).padStart(2,"0"); }
+function toKey(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function todayKey(){ return toKey(new Date()); }
+var WEEK = ["일","월","화","수","목","금","토"];
+function fmtLong(key){
+  var p = key.split("-").map(Number);
+  var dt = new Date(p[0], p[1]-1, p[2]);
+  return p[0]+"년 "+p[1]+"월 "+p[2]+"일 ("+WEEK[dt.getDay()]+")";
+}
+function shiftKey(key, days){
+  var p = key.split("-").map(Number);
+  var dt = new Date(p[0], p[1]-1, p[2]);
   dt.setDate(dt.getDate()+days);
   return toKey(dt);
-};
+}
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
-function App(){
-  const [name, setName] = useState("");
-  const [draftName, setDraftName] = useState("");
-  const [viewDate, setViewDate] = useState(todayKey());
-  const [text, setText] = useState("");
-  const [status, setStatus] = useState("idle"); // idle|sending|done|error
+var state = { name:"", draftName:"", viewDate:todayKey(), text:"", status:"idle" };
+var app = document.getElementById("app");
 
-  useEffect(() => { setText(""); setStatus("idle"); }, [viewDate, name]);
-
-  const submit = async () => {
-    const t = text.trim();
-    if(!t) return;
-    setStatus("sending");
-    try{
-      await fetch(ENDPOINT, {
-        method:"POST",
-        mode:"no-cors",
-        headers:{ "Content-Type":"text/plain;charset=utf-8" },
-        body: JSON.stringify({ name, date: viewDate, text: t })
-      });
-      setStatus("done");
-      setText("");
-    }catch(e){
-      console.error(e);
-      setStatus("error");
-    }
-  };
-
-  const isToday = viewDate === todayKey();
-  const isFuture = viewDate > todayKey();
-
-  // 이름 입력
-  if(!name){
-    return (
-      <div className="gate">
-        <div className="eyebrow">일일 업무 보고</div>
-        <h1 style={{fontSize:40, margin:"8px 0 6px"}}>오늘, 무엇을 끝냈나요</h1>
-        <p className="lead" style={{margin:"0 0 28px"}}>
-          이름을 입력하고 그날의 중요한 업무를 기록하세요. 제출하면 구글 시트에 저장됩니다.
-        </p>
-        <input autoFocus value={draftName}
-          onChange={(e)=>setDraftName(e.target.value)}
-          onKeyDown={(e)=> e.key==="Enter" && draftName.trim() && setName(draftName.trim())}
-          placeholder="이름 (예: 김지원)" />
-        <button className="btn btn-block"
-          onClick={()=> draftName.trim() && setName(draftName.trim())}>
-          시작하기
-        </button>
-      </div>
-    );
-  }
-
-  // 작성 화면
-  return (
-    <div className="wrap">
-      <header className="app">
-        <div>
-          <div className="eyebrow">일일 업무 보고</div>
-          <div style={{fontFamily:"'Hahmlet',serif", fontWeight:700, fontSize:22, lineHeight:1.1}}>
-            {name}님의 기록
-          </div>
-        </div>
-        <div style={{textAlign:"right"}}>
-          <div className="dot">● 시트 연결됨</div>
-          <button className="textbtn" onClick={()=>setName("")}>이름 변경</button>
-        </div>
-      </header>
-
-      <div className="datebar">
-        <button className="arrow" onClick={()=>setViewDate(shiftKey(viewDate,-1))}>‹</button>
-        <div style={{textAlign:"center"}}>
-          <div style={{fontFamily:"'Hahmlet',serif", fontWeight:700, fontSize:17}}>{fmtLong(viewDate)}</div>
-          {!isToday && <button className="textbtn" onClick={()=>setViewDate(todayKey())}>오늘로</button>}
-        </div>
-        <button className="arrow" disabled={isToday} onClick={()=> !isToday && setViewDate(shiftKey(viewDate,1))}>›</button>
-      </div>
-
-      <main>
-        <label className="field">오늘 한 중요한 업무</label>
-        {isFuture ? (
-          <p style={{color:"var(--sub)", fontSize:14}}>미래 날짜에는 작성할 수 없어요.</p>
-        ) : (
-          <React.Fragment>
-            <textarea value={text}
-              onChange={(e)=>{ setText(e.target.value); if(status!=="idle") setStatus("idle"); }}
-              placeholder={"· 진행한 일\n· 결과 / 진척\n· 막힌 점이나 공유할 사항"} />
-            <div className="row">
-              <button className="btn" disabled={!text.trim() || status==="sending"} onClick={submit}>
-                {status==="sending" ? "전송 중…" : "구글 시트로 제출"}
-              </button>
-              {status==="done" && <span className="ok">✓ 시트에 저장됐어요</span>}
-              {status==="error" && <span className="err">전송 실패 · 주소를 확인하세요</span>}
-            </div>
-            <p className="note">
-              제출한 내용과 동료들의 기록은 연결된 <b>구글 시트</b>에서 확인하세요.
-              같은 날 다시 제출하면 시트의 기존 줄이 갱신됩니다.
-            </p>
-          </React.Fragment>
-        )}
-      </main>
-    </div>
-  );
+function render(){
+  if(!state.name){ renderGate(); return; }
+  renderForm();
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+function renderGate(){
+  app.innerHTML =
+    '<div class="gate">' +
+      '<div class="eyebrow">일일 업무 보고</div>' +
+      '<h1 style="font-size:40px;margin:8px 0 6px">오늘, 무엇을 끝냈나요</h1>' +
+      '<p class="lead" style="margin:0 0 28px">이름을 입력하고 그날의 중요한 업무를 기록하세요. 제출하면 구글 시트에 저장됩니다.</p>' +
+      '<input id="nameInput" placeholder="이름 (예: 김지원)" value="'+esc(state.draftName)+'" />' +
+      '<button class="btn btn-block" id="startBtn">시작하기</button>' +
+    '</div>';
+  var input = document.getElementById("nameInput");
+  var go = function(){ var v = input.value.trim(); if(v){ state.name = v; state.text=""; state.status="idle"; render(); } };
+  input.addEventListener("input", function(e){ state.draftName = e.target.value; });
+  input.addEventListener("keydown", function(e){ if(e.key==="Enter") go(); });
+  document.getElementById("startBtn").addEventListener("click", go);
+  input.focus();
+}
+
+function renderForm(){
+  var isToday = state.viewDate === todayKey();
+  var isFuture = state.viewDate > todayKey();
+  var body;
+  if(isFuture){
+    body = '<p style="color:var(--sub);font-size:14px">미래 날짜에는 작성할 수 없어요.</p>';
+  } else {
+    var okHtml  = state.status==="done"  ? '<span class="ok">✓ 시트에 저장됐어요</span>' : '';
+    var errHtml = state.status==="error" ? '<span class="err">전송 실패 · 주소를 확인하세요</span>' : '';
+    var btnLabel = state.status==="sending" ? "전송 중…" : "구글 시트로 제출";
+    var disabled = (!state.text.trim() || state.status==="sending") ? "disabled" : "";
+    body =
+      '<textarea id="reportText" placeholder="· 진행한 일&#10;· 결과 / 진척&#10;· 막힌 점이나 공유할 사항">'+esc(state.text)+'</textarea>' +
+      '<div class="row">' +
+        '<button class="btn" id="submitBtn" '+disabled+'>'+btnLabel+'</button>' +
+        okHtml + errHtml +
+      '</div>' +
+      '<p class="note">제출한 내용과 동료들의 기록은 연결된 <b>구글 시트</b>에서 확인하세요. 같은 날 다시 제출하면 시트의 기존 줄이 갱신됩니다.</p>';
+  }
+  app.innerHTML =
+    '<header class="app">' +
+      '<div><div class="eyebrow">일일 업무 보고</div><div class="hname">'+esc(state.name)+'님의 기록</div></div>' +
+      '<div style="text-align:right"><div class="dot">● 시트 연결됨</div><button class="textbtn" id="changeName">이름 변경</button></div>' +
+    '</header>' +
+    '<div class="datebar">' +
+      '<button class="arrow" id="prevDay">‹</button>' +
+      '<div style="text-align:center"><div class="dlabel">'+fmtLong(state.viewDate)+'</div>' +
+        (isToday ? '' : '<button class="textbtn" id="goToday">오늘로</button>') + '</div>' +
+      '<button class="arrow" id="nextDay" '+(isToday?'disabled':'')+'>›</button>' +
+    '</div>' +
+    '<main><label class="field">오늘 한 중요한 업무</label>'+body+'</main>';
+
+  document.getElementById("changeName").addEventListener("click", function(){ state.name=""; state.draftName=""; render(); });
+  document.getElementById("prevDay").addEventListener("click", function(){ state.viewDate = shiftKey(state.viewDate,-1); state.text=""; state.status="idle"; render(); });
+  var nextBtn = document.getElementById("nextDay");
+  if(nextBtn) nextBtn.addEventListener("click", function(){ if(!isToday){ state.viewDate = shiftKey(state.viewDate,1); state.text=""; state.status="idle"; render(); } });
+  var goToday = document.getElementById("goToday");
+  if(goToday) goToday.addEventListener("click", function(){ state.viewDate = todayKey(); state.text=""; state.status="idle"; render(); });
+  var ta = document.getElementById("reportText");
+  if(ta){
+    ta.addEventListener("input", function(e){
+      state.text = e.target.value;
+      var btn = document.getElementById("submitBtn");
+      if(btn) btn.disabled = (!state.text.trim() || state.status==="sending");
+    });
+  }
+  var submitBtn = document.getElementById("submitBtn");
+  if(submitBtn) submitBtn.addEventListener("click", submit);
+}
+
+function submit(){
+  var t = state.text.trim();
+  if(!t) return;
+  state.status = "sending";
+  render();
+  fetch(ENDPOINT, {
+    method:"POST",
+    mode:"no-cors",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ name: state.name, date: state.viewDate, text: t })
+  }).then(function(){
+    state.status = "done"; state.text = ""; render();
+  }).catch(function(e){
+    console.error(e); state.status = "error"; render();
+  });
+}
+
+render();
 </script>
 </body>
 </html>
