@@ -59,6 +59,8 @@
 <script>
 // 배포한 구글 웹앱 URL을 여기에 넣어주세요 (.../exec 로 끝나는 주소)
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbyzeGcjaCHPA0U4q8Bs5h4ZgMmzfwiCnbcaGKKAnDJcww7WnfHVOWYNz180RueA2V3EiA/exec";
+// 공용 비밀번호 (구글 스크립트와 똑같아야 함)
+var PASSWORD = "mnhent0552!";
 
 function pad(n){ return String(n).padStart(2,"0"); }
 function toKey(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
@@ -77,12 +79,35 @@ function shiftKey(key, days){
 }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
-var state = { name:"", draftName:"", viewDate:todayKey(), text:"", status:"idle" };
+var state = { unlocked:false, draftPw:"", pwError:false, name:"", draftName:"", viewDate:todayKey(), text:"", status:"idle" };
 var app = document.getElementById("app");
 
 function render(){
+  if(!state.unlocked){ renderLock(); return; }
   if(!state.name){ renderGate(); return; }
   renderForm();
+}
+
+// 비밀번호 화면
+function renderLock(){
+  app.innerHTML =
+    '<div class="gate">' +
+      '<div class="eyebrow">사내 전용</div>' +
+      '<h1 style="font-size:34px;margin:8px 0 6px">접속 비밀번호</h1>' +
+      '<p class="lead" style="margin:0 0 24px">회사에서 공유받은 비밀번호를 입력하세요.</p>' +
+      '<input id="pwInput" type="password" placeholder="비밀번호" value="'+esc(state.draftPw)+'" />' +
+      (state.pwError ? '<p class="err" style="margin:10px 0 0">비밀번호가 올바르지 않습니다.</p>' : '') +
+      '<button class="btn btn-block" id="unlockBtn">들어가기</button>' +
+    '</div>';
+  var input = document.getElementById("pwInput");
+  var go = function(){
+    if(input.value === PASSWORD){ state.unlocked = true; state.pwError = false; render(); }
+    else { state.pwError = true; state.draftPw = ""; render(); }
+  };
+  input.addEventListener("input", function(e){ state.draftPw = e.target.value; });
+  input.addEventListener("keydown", function(e){ if(e.key==="Enter") go(); });
+  document.getElementById("unlockBtn").addEventListener("click", go);
+  input.focus();
 }
 
 function renderGate(){
@@ -161,7 +186,7 @@ function submit(){
     method:"POST",
     mode:"no-cors",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
-    body: JSON.stringify({ name: state.name, date: state.viewDate, text: t })
+    body: JSON.stringify({ password: PASSWORD, name: state.name, date: state.viewDate, text: t })
   }).then(function(){
     state.status = "done"; state.text = ""; render();
   }).catch(function(e){
